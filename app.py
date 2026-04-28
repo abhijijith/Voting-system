@@ -82,21 +82,83 @@ def admin():
 
         return "<h3>Setup Done! Go to /login</h3>"
 
-    return """
-    <h2>Admin Setup</h2>
-    <form method="post" enctype="multipart/form-data">
-        Total Students: <input name="total_students"><br><br>
-        Absent Rolls: <input name="absent_rolls"><br><br>
-        Number of Candidates: <input name="num_candidates"><br><br>
+    return render_template_string("""
+<!DOCTYPE html>
+<html>
+<head>
+<title>Admin Setup</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 
-        <input name="name_0"> <select name="gender_0"><option>Male</option><option>Female</option></select> <input type="file" name="photo_0"><br>
-        <input name="name_1"> <select name="gender_1"><option>Male</option><option>Female</option></select> <input type="file" name="photo_1"><br>
-        <input name="name_2"> <select name="gender_2"><option>Male</option><option>Female</option></select> <input type="file" name="photo_2"><br>
-        <input name="name_3"> <select name="gender_3"><option>Male</option><option>Female</option></select> <input type="file" name="photo_3"><br>
+<style>
+body {
+    background: linear-gradient(135deg,#1f1c2c,#928dab);
+}
+.card {
+    border-radius: 20px;
+    background:#2c2c3e;
+    color:white;
+    box-shadow:0 10px 30px rgba(0,0,0,0.5);
+}
+input, select {
+    border-radius:10px !important;
+}
+.section-title {
+    margin-top:20px;
+}
+</style>
+</head>
 
-        <br><button>Start Election</button>
-    </form>
-    """
+<body>
+
+<div class="container mt-5">
+
+<div class="card p-4">
+<h2 class="text-center">⚙ Election Setup</h2>
+
+<form method="post" enctype="multipart/form-data">
+
+<div class="mb-3">
+<label>Total Students</label>
+<input class="form-control" name="total_students" required>
+</div>
+
+<div class="mb-3">
+<label>Absent Rolls (e.g. 2,5,10)</label>
+<input class="form-control" name="absent_rolls">
+</div>
+
+<div class="mb-3">
+<label>Number of Candidates</label>
+<input class="form-control" name="num_candidates" required>
+</div>
+
+<h4 class="section-title">Candidates</h4>
+
+{% for i in range(6) %}
+<div class="border p-3 mb-3 rounded bg-dark">
+
+<input class="form-control mb-2" name="name_{{i}}" placeholder="Candidate Name">
+
+<select class="form-control mb-2" name="gender_{{i}}">
+<option>Male</option>
+<option>Female</option>
+</select>
+
+<input type="file" class="form-control" name="photo_{{i}}">
+
+</div>
+{% endfor %}
+
+<button class="btn btn-primary w-100 mt-3">🚀 Start Election</button>
+
+</form>
+</div>
+
+</div>
+
+</body>
+</html>
+""")
 
 # -------- LOGIN --------
 @app.route("/login", methods=["GET","POST"])
