@@ -195,7 +195,158 @@ def export():
     doc.build(content)
 
     return send_file(file_path, as_attachment=True)
+# -------- LOGIN --------
+@app.route("/login", methods=["GET","POST"])
+def login():
+    error = None
 
+    if request.method == "POST":
+        roll = request.form["roll"]
+        password = request.form["password"]
+
+        conn = sqlite3.connect("voting.db")
+        c = conn.cursor()
+        c.execute("SELECT * FROM students WHERE roll=? AND password=? AND allowed=1", (roll,password))
+        user = c.fetchone()
+        conn.close()
+
+        if user:
+            session["roll"] = roll
+            return redirect("/vote")
+        else:
+            error = "Invalid or not allowed"
+
+    return render_template_string("""
+    <html>
+    <body style="background:#1f1c2c;color:white;display:flex;justify-content:center;align-items:center;height:100vh;">
+    <form method="post">
+        <h3>Student Login</h3>
+        <input name="roll" placeholder="Roll"><br><br>
+        <input type="password" name="password" placeholder="Password"><br><br>
+        <button>Login</button>
+        <p style="color:red;">{{error}}</p>
+    </form>
+    </body>
+    </html>
+    """, error=error)
+# -------- VOTE --------
+@app.route("/vote", methods=["GET","POST"])
+def vote():
+    if "roll" not in session:
+        return redirect("/login")
+
+    roll = session["roll"]
+
+    conn = sqlite3.connect("voting.db")
+    c = conn.cursor()
+
+    c.execute("SELECT voted FROM students WHERE roll=?", (roll,))
+    if c.fetchone()[0] == 1:
+        return "Already voted"
+
+    if request.method == "POST":
+        male = request.form.get("male")
+        female = request.form.get("female")
+
+        c.execute("UPDATE candidates SET votes=votes+1 WHERE id=?", (male,))
+        c.execute("UPDATE candidates SET votes=votes+1 WHERE id=?", (female,))
+        c.execute("UPDATE students SET voted=1 WHERE roll=?", (roll,))
+        conn.commit()
+        conn.close()
+
+        return "<h3>Vote Submitted</h3>"
+
+    c.execute("SELECT * FROM candidates")
+    data = c.fetchall()
+    conn.close()
+
+    male = [d for d in data if d[2]=="Male"]
+    female = [d for d in data if d[2]=="Female"]
+
+    return render_template_string("""
+    <h2>Vote</h2>
+    <form method="post">
+
+    <h3>Male</h3>
+    {% for c in male %}
+        <input type="radio" name="male" value="{{c[0]}}"> {{c[1]}}<br>
+    {% endfor %}
+
+    <h3>Female</h3>
+    {% for c in female %}
+        <input type="radio" name="female" value="{{c[0]}}"> {{c[1]}}<br>
+    {% endfor %}
+
+    <button>Submit</button>
+    </form>
+    """, male=male, female=female)
+@app.route("/result")
+def result():
+    conn = sqlite3.connect("voting.db")
+    c = conn.cursor()
+
+    c.execute("SELECT * FROM candidates")
+    data = c.fetchall()
+    conn.close()
+
+    total_votes = sum([d[4] for d in data]) or 1
+    sorted_data = sorted(data, key=lambda x: x[4], reverse=True)
+
+    male = [d for d in data if d[2]=="Male"]
+    female = [d for d in data if d[2]=="Female"]
+
+    male_winner = max(male, key=lambda x: x[4]) if male else None
+    female_winner = max(female, key=lambda x: x[4]) if female else None
+
+    html = """
+    <html>
+    <head>
+    <style>
+    body{background:#121212;color:white;font-family:Arial;}
+    .card{background:white;color:black;padding:10px;margin:10px;border-radius:10px;}
+    .winner{border:3px solid gold;}
+    </style>
+    </head>
+    <body>
+
+    <h2 style="text-align:center;">📊 Results</h2>
+    """
+
+    # leaderboard
+    for i, d in enumerate(sorted_data):
+        percent = (d[4]/total_votes)*100
+
+        html += f"""
+        <div class="card">
+        <b>#{i+1} {d[1]} ({d[2]})</b><br>
+        Votes: {d[4]} ({percent:.1f}%)
+        </div>
+        """
+
+    # winners
+    html += "<h2 style='text-align:center;'>🏆 Winners</h2><div style='display:flex;justify-content:space-around;'>"
+
+    if male_winner:
+        html += f"""
+        <div class="card winner">
+        <h3>Male Winner</h3>
+        <img src="/static/uploads/{male_winner[3]}" height="150"><br>
+        {male_winner[1]}
+        </div>
+        """
+
+    if female_winner:
+        html += f"""
+        <div class="card winner">
+        <h3>Female Winner</h3>
+        <img src="/static/uploads/{female_winner[3]}" height="150"><br>
+        {female_winner[1]}
+        </div>
+        """
+
+    html += "</div></body></html>"
+
+    return html
 # -------- RUN --------
 if __name__ == "__main__":
     app.run()
