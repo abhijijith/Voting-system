@@ -53,18 +53,18 @@ def admin():
         c.execute("DELETE FROM students")
         c.execute("DELETE FROM candidates")
 
-        # create all students
+        # Create students
         for r in range(1, total_students+1):
             c.execute("INSERT INTO students VALUES (?, ?, 0, 1)", (r, str(r)))
 
-        # block absent
+        # Block absent
         absent_list = [int(x.strip()) for x in absent_rolls.split(",") if x.strip().isdigit()]
         for r in absent_list:
             c.execute("UPDATE students SET allowed=0 WHERE roll=?", (r,))
 
         present_count = total_students - len(absent_list)
 
-        # candidates
+        # Add candidates
         for i in range(num_candidates):
             name = request.form.get(f"name_{i}")
             gender = request.form.get(f"gender_{i}")
@@ -86,76 +86,43 @@ def admin():
 <!DOCTYPE html>
 <html>
 <head>
-<title>Admin Setup</title>
+<title>Admin</title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-
 <style>
-body {
-    background: linear-gradient(135deg,#1f1c2c,#928dab);
-}
-.card {
-    border-radius: 20px;
-    background:#2c2c3e;
-    color:white;
-    box-shadow:0 10px 30px rgba(0,0,0,0.5);
-}
-input, select {
-    border-radius:10px !important;
-}
-.section-title {
-    margin-top:20px;
-}
+body{background:linear-gradient(135deg,#1f1c2c,#928dab);}
+.card{background:#2c2c3e;color:white;border-radius:20px;}
 </style>
 </head>
-
 <body>
-
 <div class="container mt-5">
-
 <div class="card p-4">
+
 <h2 class="text-center">⚙ Election Setup</h2>
 
 <form method="post" enctype="multipart/form-data">
 
-<div class="mb-3">
-<label>Total Students</label>
-<input class="form-control" name="total_students" required>
-</div>
+<input class="form-control mb-2" name="total_students" placeholder="Total Students">
 
-<div class="mb-3">
-<label>Absent Rolls (e.g. 2,5,10)</label>
-<input class="form-control" name="absent_rolls">
-</div>
+<input class="form-control mb-2" name="absent_rolls" placeholder="Absent Rolls (e.g. 2,5,10)">
 
-<div class="mb-3">
-<label>Number of Candidates</label>
-<input class="form-control" name="num_candidates" required>
-</div>
-
-<h4 class="section-title">Candidates</h4>
+<input class="form-control mb-3" name="num_candidates" placeholder="Number of Candidates">
 
 {% for i in range(6) %}
-<div class="border p-3 mb-3 rounded bg-dark">
-
-<input class="form-control mb-2" name="name_{{i}}" placeholder="Candidate Name">
-
-<select class="form-control mb-2" name="gender_{{i}}">
+<div class="border p-2 mb-2 rounded bg-dark">
+<input class="form-control mb-1" name="name_{{i}}" placeholder="Name">
+<select class="form-control mb-1" name="gender_{{i}}">
 <option>Male</option>
 <option>Female</option>
 </select>
-
 <input type="file" class="form-control" name="photo_{{i}}">
-
 </div>
 {% endfor %}
 
-<button class="btn btn-primary w-100 mt-3">🚀 Start Election</button>
+<button class="btn btn-primary w-100">Start</button>
 
 </form>
 </div>
-
 </div>
-
 </body>
 </html>
 """)
@@ -163,12 +130,15 @@ input, select {
 # -------- LOGIN --------
 @app.route("/login", methods=["GET","POST"])
 def login():
+    error = None
+
     if request.method == "POST":
         roll = request.form["roll"]
         password = request.form["password"]
 
         conn = sqlite3.connect("voting.db")
         c = conn.cursor()
+
         c.execute("SELECT * FROM students WHERE roll=? AND password=? AND allowed=1", (roll,password))
         user = c.fetchone()
         conn.close()
@@ -177,30 +147,47 @@ def login():
             session["roll"] = roll
             return redirect("/vote")
         else:
-            return "Not allowed"
+            error = "Invalid roll or not allowed"
 
-    return """
+    return render_template_string("""
 <!DOCTYPE html>
 <html>
 <head>
+<title>Login</title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 <style>
-body {background:linear-gradient(135deg,#1f1c2c,#928dab);height:100vh;display:flex;align-items:center;justify-content:center;}
-.card{border-radius:20px;background:#2c2c3e;color:white;}
+body{background:linear-gradient(135deg,#1f1c2c,#928dab);display:flex;justify-content:center;align-items:center;height:100vh;}
+.card{background:#2c2c3e;color:white;border-radius:20px;}
 </style>
 </head>
 <body>
-<div class="card p-4">
-<h3>🗳 Login</h3>
+
+<div class="card p-4 text-center" style="width:320px;">
+<h3>🗳 Student Login</h3>
+
+<p>Roll = Username<br>Password = Same Roll</p>
+
 <form method="post">
-<input class="form-control mb-2" name="roll" placeholder="Roll">
-<input type="password" class="form-control mb-2" name="password">
+
+<label>Roll Number</label>
+<input class="form-control mb-2" name="roll" required>
+
+<label>Password</label>
+<input type="password" class="form-control mb-2" name="password" required>
+
+{% if error %}
+<p class="text-danger">{{error}}</p>
+{% endif %}
+
 <button class="btn btn-primary w-100">Login</button>
+
 </form>
+
 </div>
+
 </body>
 </html>
-"""
+""", error=error)
 
 # -------- VOTE --------
 @app.route("/vote", methods=["GET","POST"])
@@ -243,11 +230,17 @@ def vote():
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 <style>
 body{background:linear-gradient(135deg,#1f1c2c,#928dab);}
+.card{position:relative;}
 .card:hover{transform:scale(1.05);transition:0.3s;}
+.overlay{
+position:absolute;bottom:0;width:100%;background:rgba(0,0,0,0.7);color:white;padding:5px;
+}
 </style>
 </head>
 <body class="text-light">
+
 <div class="container mt-4">
+
 <h2 class="text-center">Vote</h2>
 
 <form method="post">
@@ -256,9 +249,13 @@ body{background:linear-gradient(135deg,#1f1c2c,#928dab);}
 <div class="row">
 {% for c in male %}
 <div class="col-md-4">
-<div class="card bg-dark p-2">
+<div class="card bg-dark p-2 mb-3">
+
 <img src="/static/uploads/{{c[3]}}" style="height:200px">
-<input type="radio" name="male" value="{{c[0]}}"> {{c[1]}}
+
+<div class="overlay">{{c[1]}}</div>
+
+<input type="radio" name="male" value="{{c[0]}}">
 </div>
 </div>
 {% endfor %}
@@ -268,17 +265,22 @@ body{background:linear-gradient(135deg,#1f1c2c,#928dab);}
 <div class="row">
 {% for c in female %}
 <div class="col-md-4">
-<div class="card bg-dark p-2">
+<div class="card bg-dark p-2 mb-3">
+
 <img src="/static/uploads/{{c[3]}}" style="height:200px">
-<input type="radio" name="female" value="{{c[0]}}"> {{c[1]}}
+
+<div class="overlay">{{c[1]}}</div>
+
+<input type="radio" name="female" value="{{c[0]}}">
 </div>
 </div>
 {% endfor %}
 </div>
 
-<button class="btn btn-primary w-100 mt-3">Submit</button>
+<button class="btn btn-primary w-100">Submit</button>
 
 </form>
+
 </div>
 </body>
 </html>
@@ -311,46 +313,20 @@ def result():
     male_winner = max(male, key=lambda x: x[4])
     female_winner = max(female, key=lambda x: x[4])
 
-    html = """
-<!DOCTYPE html>
-<html>
-<head>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
-<style>
-body{background:linear-gradient(135deg,#1f1c2c,#928dab);}
-.winner{border:3px solid gold;box-shadow:0 0 20px gold;}
-</style>
-</head>
-<body class="text-light text-center">
-<div class="container mt-5">
-<h2>Results</h2>
-"""
+    html = "<html><body style='background:black;color:white;text-align:center'>"
 
     for d in data:
         html += f"<p>{d[1]} - {d[4]}</p>"
 
-    html += f"""
-<div class="row mt-5">
-<div class="col-md-6">
-<div class="card winner bg-dark p-3">
-<h4>Male Winner</h4>
-<img src="/static/uploads/{male_winner[3]}" height="200">
-<h5>{male_winner[1]}</h5>
-</div>
-</div>
+    html += f"<h3>Male Winner: {male_winner[1]}</h3>"
+    html += f"<img src='/static/uploads/{male_winner[3]}' width='150'>"
 
-<div class="col-md-6">
-<div class="card winner bg-dark p-3">
-<h4>Female Winner</h4>
-<img src="/static/uploads/{female_winner[3]}" height="200">
-<h5>{female_winner[1]}</h5>
-</div>
-</div>
-</div>
-"""
+    html += f"<h3>Female Winner: {female_winner[1]}</h3>"
+    html += f"<img src='/static/uploads/{female_winner[3]}' width='150'>"
 
-    html += "<script>confetti();</script></div></body></html>"
+    html += "<script src='https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js'></script><script>confetti();</script>"
+
+    html += "</body></html>"
 
     return html
 
