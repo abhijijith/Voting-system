@@ -242,56 +242,109 @@ def vote():
 
 # -------- RESULT --------
 # BEFORE script (keep f-string for Python variables)
-html += f"""
-<div class="mt-5">
-    <h3>🏆 Male Winner</h3>
-    <img src="/static/uploads/{male_winner[3]}" width="150"><br>
-    <strong>{male_winner[0]}</strong>
-</div>
+@app.route("/result")
+def result():
+    conn = sqlite3.connect("voting.db")
+    c = conn.cursor()
 
-<div class="mt-4">
-    <h3>🏆 Female Winner</h3>
-    <img src="/static/uploads/{female_winner[3]}" width="150"><br>
-    <strong>{female_winner[0]}</strong>
-</div>
-</div>
-"""
+    # total voters
+    c.execute("SELECT value FROM settings WHERE key='total_voters'")
+    total = int(c.fetchone()[0])
 
-# NOW add JS WITHOUT f-string
-html += """
-<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    # check remaining voters
+    c.execute("SELECT COUNT(*) FROM students WHERE voted=0")
+    remaining = c.fetchone()[0]
 
-<script>
-function launchConfetti() {
-    var duration = 3000;
-    var end = Date.now() + duration;
+    if remaining > 0:
+        return f"<h3>{remaining} voters remaining out of {total}</h3>"
 
-    (function frame() {
-        confetti({
-            particleCount: 5,
-            angle: 60,
-            spread: 55,
-            origin: { x: 0 }
-        });
-        confetti({
-            particleCount: 5,
-            angle: 120,
-            spread: 55,
-            origin: { x: 1 }
-        });
+    # fetch data (including image)
+    c.execute("SELECT name, gender, votes, image FROM candidates")
+    data = c.fetchall()
+    conn.close()
 
-        if (Date.now() < end) {
-            requestAnimationFrame(frame);
-        }
-    })();
-}
+    male = [d for d in data if d[1] == "Male"]
+    female = [d for d in data if d[1] == "Female"]
 
-launchConfetti();
-</script>
+    male_winner = max(male, key=lambda x: x[2])
+    female_winner = max(female, key=lambda x: x[2])
 
-</body>
-</html>
-"""
+    # ✅ START HTML (IMPORTANT)
+    html = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <title>Results</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    </head>
+
+    <body class="bg-dark text-light">
+    <div class="container text-center mt-5">
+    <h2>📊 Election Results</h2>
+    """
+
+    # show all candidates
+    for d in data:
+        html += f"""
+        <div class="card bg-secondary mt-3 p-2">
+            <img src="/static/uploads/{d[3]}" width="120" style="border-radius:10px;"><br>
+            {d[0]} ({d[1]}) - {d[2]} votes
+        </div>
+        """
+
+    # winners section
+    html += f"""
+    <div class="mt-5">
+        <h3>🏆 Male Winner</h3>
+        <img src="/static/uploads/{male_winner[3]}" width="150"><br>
+        <strong>{male_winner[0]}</strong>
+    </div>
+
+    <div class="mt-4">
+        <h3>🏆 Female Winner</h3>
+        <img src="/static/uploads/{female_winner[3]}" width="150"><br>
+        <strong>{female_winner[0]}</strong>
+    </div>
+
+    </div>
+    """
+
+    # ✅ JS PART (NO f-string → no crash)
+    html += """
+    <script>
+    function launchConfetti() {
+        var duration = 3000;
+        var end = Date.now() + duration;
+
+        (function frame() {
+            confetti({
+                particleCount: 5,
+                angle: 60,
+                spread: 55,
+                origin: { x: 0 }
+            });
+            confetti({
+                particleCount: 5,
+                angle: 120,
+                spread: 55,
+                origin: { x: 1 }
+            });
+
+            if (Date.now() < end) {
+                requestAnimationFrame(frame);
+            }
+        })();
+    }
+
+    launchConfetti();
+    </script>
+
+    </body>
+    </html>
+    """
+
+    return html
 
 # -------- RUN --------
 import os
