@@ -241,44 +241,79 @@ def vote():
 """, male=male, female=female)
 
 # -------- RESULT --------
-@app.route("/result")
-def result():
-    conn = sqlite3.connect("voting.db")
-    c = conn.cursor()
+@html = """
+<!DOCTYPE html>
+<html>
+<head>
+<title>Results</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 
-    c.execute("SELECT value FROM settings WHERE key='total_voters'")
-    total = int(c.fetchone()[0])
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 
-    c.execute("SELECT COUNT(*) FROM students WHERE voted=0")
-    remaining = c.fetchone()[0]
+</head>
 
-    if remaining > 0:
-        return f"<h3>{remaining} voters remaining out of {total}</h3>"
+<body class="bg-dark text-light">
 
-    c.execute("SELECT name, gender, votes FROM candidates")
-    data = c.fetchall()
-    conn.close()
+<div class="container text-center mt-5">
+<h2>📊 Election Results</h2>
+"""
 
-    male = [d for d in data if d[1]=="Male"]
-    female = [d for d in data if d[1]=="Female"]
-
-    male_winner = max(male, key=lambda x: x[2])
-    female_winner = max(female, key=lambda x: x[2])
-
-    html = """
-    <html><body style='background:black;color:white;text-align:center'>
-    <h2>📊 Results</h2>
+# Show all candidates
+for d in data:
+    html += f"""
+    <div class="card bg-secondary mt-3 p-2">
+        <img src="/static/uploads/{d[3]}" width="120" style="border-radius:10px;"><br>
+        {d[0]} ({d[1]}) - {d[2]} votes
+    </div>
     """
 
-    for d in data:
-        html += f"<p>{d[0]} ({d[1]}) - {d[2]} votes</p>"
+# Winners section
+html += f"""
+<div class="mt-5">
+    <h3>🏆 Male Winner</h3>
+    <img src="/static/uploads/{male_winner[3]}" width="150"><br>
+    <strong>{male_winner[0]}</strong>
+</div>
 
-    html += f"<h3>👨 Male Winner: {male_winner[0]}</h3>"
-    html += f"<h3>👩 Female Winner: {female_winner[0]}</h3>"
+<div class="mt-4">
+    <h3>🏆 Female Winner</h3>
+    <img src="/static/uploads/{female_winner[3]}" width="150"><br>
+    <strong>{female_winner[0]}</strong>
+</div>
 
-    html += "</body></html>"
+</div>
 
-    return html
+<script>
+function launchConfetti() {{
+    var duration = 3 * 1000;
+    var end = Date.now() + duration;
+
+    (function frame() {{
+        confetti({{
+            particleCount: 5,
+            angle: 60,
+            spread: 55,
+            origin: {{ x: 0 }}
+        }});
+        confetti({{
+            particleCount: 5,
+            angle: 120,
+            spread: 55,
+            origin: {{ x: 1 }}
+        }});
+
+        if (Date.now() < end) {{
+            requestAnimationFrame(frame);
+        }}
+    }})();
+}}
+
+launchConfetti();
+</script>
+
+</body>
+</html>
+"""
 
 # -------- RUN --------
 import os
