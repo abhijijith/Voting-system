@@ -53,18 +53,18 @@ def admin():
         c.execute("DELETE FROM students")
         c.execute("DELETE FROM candidates")
 
-        # Create all students
+        # create all students
         for r in range(1, total_students+1):
-            c.execute("INSERT INTO students VALUES (?, ?, 0, 1)", (r, str(r)))  # allowed = 1
+            c.execute("INSERT INTO students VALUES (?, ?, 0, 1)", (r, str(r)))
 
-        # Block absent students
+        # block absent
         absent_list = [int(x.strip()) for x in absent_rolls.split(",") if x.strip().isdigit()]
         for r in absent_list:
             c.execute("UPDATE students SET allowed=0 WHERE roll=?", (r,))
 
         present_count = total_students - len(absent_list)
 
-        # Add candidates
+        # candidates
         for i in range(num_candidates):
             name = request.form.get(f"name_{i}")
             gender = request.form.get(f"gender_{i}")
@@ -73,7 +73,6 @@ def admin():
             if name and gender and file:
                 filename = secure_filename(file.filename)
                 file.save(os.path.join(app.config["UPLOAD_FOLDER"], filename))
-
                 c.execute("INSERT INTO candidates(name,gender,image,votes) VALUES (?,?,?,0)",
                           (name, gender, filename))
 
@@ -87,10 +86,9 @@ def admin():
     <h2>Admin Setup</h2>
     <form method="post" enctype="multipart/form-data">
         Total Students: <input name="total_students"><br><br>
-        Absent Rolls (comma separated): <input name="absent_rolls"><br><br>
+        Absent Rolls: <input name="absent_rolls"><br><br>
         Number of Candidates: <input name="num_candidates"><br><br>
 
-        <h3>Candidates</h3>
         <input name="name_0"> <select name="gender_0"><option>Male</option><option>Female</option></select> <input type="file" name="photo_0"><br>
         <input name="name_1"> <select name="gender_1"><option>Male</option><option>Female</option></select> <input type="file" name="photo_1"><br>
         <input name="name_2"> <select name="gender_2"><option>Male</option><option>Female</option></select> <input type="file" name="photo_2"><br>
@@ -109,7 +107,6 @@ def login():
 
         conn = sqlite3.connect("voting.db")
         c = conn.cursor()
-
         c.execute("SELECT * FROM students WHERE roll=? AND password=? AND allowed=1", (roll,password))
         user = c.fetchone()
         conn.close()
@@ -118,16 +115,30 @@ def login():
             session["roll"] = roll
             return redirect("/vote")
         else:
-            return "Not allowed or invalid login"
+            return "Not allowed"
 
     return """
-    <h2>Login</h2>
-    <form method="post">
-        Roll: <input name="roll"><br>
-        Password: <input type="password" name="password"><br>
-        <button>Login</button>
-    </form>
-    """
+<!DOCTYPE html>
+<html>
+<head>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>
+body {background:linear-gradient(135deg,#1f1c2c,#928dab);height:100vh;display:flex;align-items:center;justify-content:center;}
+.card{border-radius:20px;background:#2c2c3e;color:white;}
+</style>
+</head>
+<body>
+<div class="card p-4">
+<h3>🗳 Login</h3>
+<form method="post">
+<input class="form-control mb-2" name="roll" placeholder="Roll">
+<input type="password" class="form-control mb-2" name="password">
+<button class="btn btn-primary w-100">Login</button>
+</form>
+</div>
+</body>
+</html>
+"""
 
 # -------- VOTE --------
 @app.route("/vote", methods=["GET","POST"])
@@ -142,14 +153,11 @@ def vote():
 
     c.execute("SELECT voted FROM students WHERE roll=?", (roll,))
     if c.fetchone()[0] == 1:
-        return "Already voted!"
+        return "Already voted"
 
     if request.method == "POST":
         male = request.form.get("male")
         female = request.form.get("female")
-
-        if not male or not female:
-            return "Select both!"
 
         c.execute("UPDATE candidates SET votes=votes+1 WHERE id=?", (male,))
         c.execute("UPDATE candidates SET votes=votes+1 WHERE id=?", (female,))
@@ -157,7 +165,7 @@ def vote():
 
         conn.commit()
         conn.close()
-        return "<h3>Vote submitted!</h3>"
+        return "<h3>Vote Submitted</h3>"
 
     c.execute("SELECT * FROM candidates")
     data = c.fetchall()
@@ -167,22 +175,52 @@ def vote():
     female = [d for d in data if d[2]=="Female"]
 
     return render_template_string("""
-    <h2>Vote</h2>
-    <form method="post">
+<!DOCTYPE html>
+<html>
+<head>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>
+body{background:linear-gradient(135deg,#1f1c2c,#928dab);}
+.card:hover{transform:scale(1.05);transition:0.3s;}
+</style>
+</head>
+<body class="text-light">
+<div class="container mt-4">
+<h2 class="text-center">Vote</h2>
 
-    <h3>Male</h3>
-    {% for c in male %}
-        <input type="radio" name="male" value="{{c[0]}}"> {{c[1]}}<br>
-    {% endfor %}
+<form method="post">
 
-    <h3>Female</h3>
-    {% for c in female %}
-        <input type="radio" name="female" value="{{c[0]}}"> {{c[1]}}<br>
-    {% endfor %}
+<h4>Male</h4>
+<div class="row">
+{% for c in male %}
+<div class="col-md-4">
+<div class="card bg-dark p-2">
+<img src="/static/uploads/{{c[3]}}" style="height:200px">
+<input type="radio" name="male" value="{{c[0]}}"> {{c[1]}}
+</div>
+</div>
+{% endfor %}
+</div>
 
-    <button>Submit</button>
-    </form>
-    """, male=male, female=female)
+<h4>Female</h4>
+<div class="row">
+{% for c in female %}
+<div class="col-md-4">
+<div class="card bg-dark p-2">
+<img src="/static/uploads/{{c[3]}}" style="height:200px">
+<input type="radio" name="female" value="{{c[0]}}"> {{c[1]}}
+</div>
+</div>
+{% endfor %}
+</div>
+
+<button class="btn btn-primary w-100 mt-3">Submit</button>
+
+</form>
+</div>
+</body>
+</html>
+""", male=male, female=female)
 
 # -------- RESULT --------
 @app.route("/result")
@@ -199,10 +237,7 @@ def result():
     preview = request.args.get("preview")
 
     if voted < total and preview != "true":
-        return f"""
-        <h3>{total - voted} voters remaining</h3>
-        <a href='/result?preview=true'>View Current Results</a>
-        """
+        return f"<h3>{total - voted} remaining</h3><a href='/result?preview=true'>Preview</a>"
 
     c.execute("SELECT * FROM candidates")
     data = c.fetchall()
@@ -215,32 +250,47 @@ def result():
     female_winner = max(female, key=lambda x: x[4])
 
     html = """
-    <html><body style='background:black;color:white;text-align:center'>
-    <h2>📊 Results</h2>
-    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
-    """
-
-    html += f"<p>Total voted: {voted} / {total}</p>"
+<!DOCTYPE html>
+<html>
+<head>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+<style>
+body{background:linear-gradient(135deg,#1f1c2c,#928dab);}
+.winner{border:3px solid gold;box-shadow:0 0 20px gold;}
+</style>
+</head>
+<body class="text-light text-center">
+<div class="container mt-5">
+<h2>Results</h2>
+"""
 
     for d in data:
-        html += f"<p>{d[1]} ({d[2]}) - {d[4]} votes</p>"
+        html += f"<p>{d[1]} - {d[4]}</p>"
 
-    html += f"<h3>🏆 Male Winner: {male_winner[1]}</h3>"
-    html += f"<img src='/static/uploads/{male_winner[3]}' width='150'>"
+    html += f"""
+<div class="row mt-5">
+<div class="col-md-6">
+<div class="card winner bg-dark p-3">
+<h4>Male Winner</h4>
+<img src="/static/uploads/{male_winner[3]}" height="200">
+<h5>{male_winner[1]}</h5>
+</div>
+</div>
 
-    html += f"<h3>🏆 Female Winner: {female_winner[1]}</h3>"
-    html += f"<img src='/static/uploads/{female_winner[3]}' width='150'>"
+<div class="col-md-6">
+<div class="card winner bg-dark p-3">
+<h4>Female Winner</h4>
+<img src="/static/uploads/{female_winner[3]}" height="200">
+<h5>{female_winner[1]}</h5>
+</div>
+</div>
+</div>
+"""
 
-    html += """
-    <script>
-    confetti();
-    </script>
-    """
-
-    html += "</body></html>"
+    html += "<script>confetti();</script></div></body></html>"
 
     return html
 
-# -------- RUN --------
 if __name__ == "__main__":
     app.run()
