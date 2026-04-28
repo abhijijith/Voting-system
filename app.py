@@ -17,7 +17,8 @@ def init_db():
     c.execute("""CREATE TABLE IF NOT EXISTS students(
         roll INTEGER PRIMARY KEY,
         password TEXT,
-        voted INTEGER DEFAULT 0
+        voted INTEGER DEFAULT 0,
+        allowed INTEGER DEFAULT 0
     )""")
 
     c.execute("""CREATE TABLE IF NOT EXISTS candidates(
@@ -42,7 +43,8 @@ init_db()
 @app.route("/admin", methods=["GET","POST"])
 def admin():
     if request.method == "POST":
-        total_voters = int(request.form["total_voters"])
+        total_students = int(request.form["total_students"])
+        absent_rolls = request.form["absent_rolls"]
         num_candidates = int(request.form["num_candidates"])
 
         conn = sqlite3.connect("voting.db")
@@ -51,9 +53,16 @@ def admin():
         c.execute("DELETE FROM students")
         c.execute("DELETE FROM candidates")
 
-        # Create voters
-        for r in range(1, total_voters+1):
-            c.execute("INSERT INTO students VALUES (?, ?, 0)", (r, str(r)))
+        # Create all students
+        for r in range(1, total_students+1):
+            c.execute("INSERT INTO students VALUES (?, ?, 0, 1)", (r, str(r)))  # allowed = 1
+
+        # Block absent students
+        absent_list = [int(x.strip()) for x in absent_rolls.split(",") if x.strip().isdigit()]
+        for r in absent_list:
+            c.execute("UPDATE students SET allowed=0 WHERE roll=?", (r,))
+
+        present_count = total_students - len(absent_list)
 
         # Add candidates
         for i in range(num_candidates):
@@ -68,47 +77,28 @@ def admin():
                 c.execute("INSERT INTO candidates(name,gender,image,votes) VALUES (?,?,?,0)",
                           (name, gender, filename))
 
-        c.execute("INSERT OR REPLACE INTO settings VALUES ('total_voters',?)", (str(total_voters),))
+        c.execute("INSERT OR REPLACE INTO settings VALUES ('present_count',?)", (str(present_count),))
         conn.commit()
         conn.close()
 
         return "<h3>Setup Done! Go to /login</h3>"
 
-    return render_template_string("""
-<!DOCTYPE html>
-<html>
-<head>
-<title>Admin</title>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
-<body class="bg-dark text-light">
+    return """
+    <h2>Admin Setup</h2>
+    <form method="post" enctype="multipart/form-data">
+        Total Students: <input name="total_students"><br><br>
+        Absent Rolls (comma separated): <input name="absent_rolls"><br><br>
+        Number of Candidates: <input name="num_candidates"><br><br>
 
-<div class="container mt-5">
-<h2 class="text-center">⚙ Election Setup</h2>
+        <h3>Candidates</h3>
+        <input name="name_0"> <select name="gender_0"><option>Male</option><option>Female</option></select> <input type="file" name="photo_0"><br>
+        <input name="name_1"> <select name="gender_1"><option>Male</option><option>Female</option></select> <input type="file" name="photo_1"><br>
+        <input name="name_2"> <select name="gender_2"><option>Male</option><option>Female</option></select> <input type="file" name="photo_2"><br>
+        <input name="name_3"> <select name="gender_3"><option>Male</option><option>Female</option></select> <input type="file" name="photo_3"><br>
 
-<form method="post" enctype="multipart/form-data" class="card p-4 bg-secondary">
-
-<input class="form-control mb-2" name="total_voters" placeholder="Total Voters" required>
-<input class="form-control mb-2" name="num_candidates" placeholder="Number of Candidates" required>
-
-{% for i in range(6) %}
-<div class="border p-2 mb-2 bg-dark rounded">
-<input class="form-control mb-2" name="name_{{i}}" placeholder="Candidate Name">
-<select class="form-control mb-2" name="gender_{{i}}">
-<option>Male</option>
-<option>Female</option>
-</select>
-<input type="file" class="form-control" name="photo_{{i}}">
-</div>
-{% endfor %}
-
-<button class="btn btn-warning w-100">Start Election</button>
-</form>
-</div>
-
-</body>
-</html>
-""")
+        <br><button>Start Election</button>
+    </form>
+    """
 
 # -------- LOGIN --------
 @app.route("/login", methods=["GET","POST"])
@@ -119,7 +109,8 @@ def login():
 
         conn = sqlite3.connect("voting.db")
         c = conn.cursor()
-        c.execute("SELECT * FROM students WHERE roll=? AND password=?", (roll,password))
+
+        c.execute("SELECT * FROM students WHERE roll=? AND password=? AND allowed=1", (roll,password))
         user = c.fetchone()
         conn.close()
 
@@ -127,30 +118,16 @@ def login():
             session["roll"] = roll
             return redirect("/vote")
         else:
-            return "Invalid login"
+            return "Not allowed or invalid login"
 
     return """
-<!DOCTYPE html>
-<html>
-<head>
-<title>Login</title>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
-<body class="bg-dark d-flex justify-content-center align-items-center vh-100">
-
-<div class="card p-4 bg-secondary text-light" style="width:300px;">
-<h3 class="text-center">🔐 Login</h3>
-
-<form method="post">
-<input class="form-control mb-2" name="roll" placeholder="Roll">
-<input type="password" class="form-control mb-2" name="password" placeholder="Password">
-<button class="btn btn-success w-100">Login</button>
-</form>
-
-</div>
-</body>
-</html>
-"""
+    <h2>Login</h2>
+    <form method="post">
+        Roll: <input name="roll"><br>
+        Password: <input type="password" name="password"><br>
+        <button>Login</button>
+    </form>
+    """
 
 # -------- VOTE --------
 @app.route("/vote", methods=["GET","POST"])
@@ -165,7 +142,7 @@ def vote():
 
     c.execute("SELECT voted FROM students WHERE roll=?", (roll,))
     if c.fetchone()[0] == 1:
-        return "You already voted!"
+        return "Already voted!"
 
     if request.method == "POST":
         male = request.form.get("male")
@@ -190,164 +167,80 @@ def vote():
     female = [d for d in data if d[2]=="Female"]
 
     return render_template_string("""
-<!DOCTYPE html>
-<html>
-<head>
-<title>Vote</title>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
+    <h2>Vote</h2>
+    <form method="post">
 
-<body class="bg-dark text-light">
-<div class="container mt-4">
+    <h3>Male</h3>
+    {% for c in male %}
+        <input type="radio" name="male" value="{{c[0]}}"> {{c[1]}}<br>
+    {% endfor %}
 
-<h2 class="text-center">🗳 Vote</h2>
+    <h3>Female</h3>
+    {% for c in female %}
+        <input type="radio" name="female" value="{{c[0]}}"> {{c[1]}}<br>
+    {% endfor %}
 
-<form method="post">
-
-<h4>👨 Male</h4>
-<div class="row">
-{% for c in male %}
-<div class="col-md-4">
-<div class="card bg-secondary mb-3 text-center">
-<img src="/static/uploads/{{c[3]}}" class="card-img-top" style="height:200px;object-fit:cover;">
-<div class="card-body">
-<input type="radio" name="male" value="{{c[0]}}"> {{c[1]}}
-</div>
-</div>
-</div>
-{% endfor %}
-</div>
-
-<h4>👩 Female</h4>
-<div class="row">
-{% for c in female %}
-<div class="col-md-4">
-<div class="card bg-secondary mb-3 text-center">
-<img src="/static/uploads/{{c[3]}}" class="card-img-top" style="height:200px;object-fit:cover;">
-<div class="card-body">
-<input type="radio" name="female" value="{{c[0]}}"> {{c[1]}}
-</div>
-</div>
-</div>
-{% endfor %}
-</div>
-
-<button class="btn btn-warning w-100">Submit Vote</button>
-
-</form>
-</div>
-</body>
-</html>
-""", male=male, female=female)
+    <button>Submit</button>
+    </form>
+    """, male=male, female=female)
 
 # -------- RESULT --------
-# BEFORE script (keep f-string for Python variables)
 @app.route("/result")
 def result():
     conn = sqlite3.connect("voting.db")
     c = conn.cursor()
 
-    # total voters
-    c.execute("SELECT value FROM settings WHERE key='total_voters'")
+    c.execute("SELECT value FROM settings WHERE key='present_count'")
     total = int(c.fetchone()[0])
 
-    # check remaining voters
-    c.execute("SELECT COUNT(*) FROM students WHERE voted=0")
-    remaining = c.fetchone()[0]
+    c.execute("SELECT COUNT(*) FROM students WHERE voted=1 AND allowed=1")
+    voted = c.fetchone()[0]
 
-    if remaining > 0:
-        return f"<h3>{remaining} voters remaining out of {total}</h3>"
+    preview = request.args.get("preview")
 
-    # fetch data (including image)
-    c.execute("SELECT name, gender, votes, image FROM candidates")
+    if voted < total and preview != "true":
+        return f"""
+        <h3>{total - voted} voters remaining</h3>
+        <a href='/result?preview=true'>View Current Results</a>
+        """
+
+    c.execute("SELECT * FROM candidates")
     data = c.fetchall()
     conn.close()
 
-    male = [d for d in data if d[1] == "Male"]
-    female = [d for d in data if d[1] == "Female"]
+    male = [d for d in data if d[2]=="Male"]
+    female = [d for d in data if d[2]=="Female"]
 
-    male_winner = max(male, key=lambda x: x[2])
-    female_winner = max(female, key=lambda x: x[2])
+    male_winner = max(male, key=lambda x: x[4])
+    female_winner = max(female, key=lambda x: x[4])
 
-    # ✅ START HTML (IMPORTANT)
     html = """
-    <!DOCTYPE html>
-    <html>
-    <head>
-    <title>Results</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <html><body style='background:black;color:white;text-align:center'>
+    <h2>📊 Results</h2>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
-    </head>
-
-    <body class="bg-dark text-light">
-    <div class="container text-center mt-5">
-    <h2>📊 Election Results</h2>
     """
 
-    # show all candidates
+    html += f"<p>Total voted: {voted} / {total}</p>"
+
     for d in data:
-        html += f"""
-        <div class="card bg-secondary mt-3 p-2">
-            <img src="/static/uploads/{d[3]}" width="120" style="border-radius:10px;"><br>
-            {d[0]} ({d[1]}) - {d[2]} votes
-        </div>
-        """
+        html += f"<p>{d[1]} ({d[2]}) - {d[4]} votes</p>"
 
-    # winners section
-    html += f"""
-    <div class="mt-5">
-        <h3>🏆 Male Winner</h3>
-        <img src="/static/uploads/{male_winner[3]}" width="150"><br>
-        <strong>{male_winner[0]}</strong>
-    </div>
+    html += f"<h3>🏆 Male Winner: {male_winner[1]}</h3>"
+    html += f"<img src='/static/uploads/{male_winner[3]}' width='150'>"
 
-    <div class="mt-4">
-        <h3>🏆 Female Winner</h3>
-        <img src="/static/uploads/{female_winner[3]}" width="150"><br>
-        <strong>{female_winner[0]}</strong>
-    </div>
+    html += f"<h3>🏆 Female Winner: {female_winner[1]}</h3>"
+    html += f"<img src='/static/uploads/{female_winner[3]}' width='150'>"
 
-    </div>
-    """
-
-    # ✅ JS PART (NO f-string → no crash)
     html += """
     <script>
-    function launchConfetti() {
-        var duration = 3000;
-        var end = Date.now() + duration;
-
-        (function frame() {
-            confetti({
-                particleCount: 5,
-                angle: 60,
-                spread: 55,
-                origin: { x: 0 }
-            });
-            confetti({
-                particleCount: 5,
-                angle: 120,
-                spread: 55,
-                origin: { x: 1 }
-            });
-
-            if (Date.now() < end) {
-                requestAnimationFrame(frame);
-            }
-        })();
-    }
-
-    launchConfetti();
+    confetti();
     </script>
-
-    </body>
-    </html>
     """
+
+    html += "</body></html>"
 
     return html
 
 # -------- RUN --------
-import os
-
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+    app.run()
