@@ -241,6 +241,7 @@ def vote():
 """, male=male, female=female)
 
 # -------- RESULT --------
+# BEFORE script (keep f-string for Python variables)
 html += f"""
 <div class="mt-5">
     <h3>🏆 Male Winner</h3>
@@ -253,33 +254,37 @@ html += f"""
     <img src="/static/uploads/{female_winner[3]}" width="150"><br>
     <strong>{female_winner[0]}</strong>
 </div>
-
 </div>
+"""
+
+# NOW add JS WITHOUT f-string
+html += """
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 
 <script>
-function launchConfetti() {{
-    var duration = 3 * 1000;
+function launchConfetti() {
+    var duration = 3000;
     var end = Date.now() + duration;
 
-    (function frame() {{
-        confetti({{
+    (function frame() {
+        confetti({
             particleCount: 5,
             angle: 60,
             spread: 55,
-            origin: {{ x: 0 }}
-        }});
-        confetti({{
+            origin: { x: 0 }
+        });
+        confetti({
             particleCount: 5,
             angle: 120,
             spread: 55,
-            origin: {{ x: 1 }}
-        }});
+            origin: { x: 1 }
+        });
 
-        if (Date.now() < end) {{
+        if (Date.now() < end) {
             requestAnimationFrame(frame);
-        }}
-    }})();
-}}
+        }
+    })();
+}
 
 launchConfetti();
 </script>
