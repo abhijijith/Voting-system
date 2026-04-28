@@ -241,33 +241,6 @@ def vote():
 """, male=male, female=female)
 
 # -------- RESULT --------
-@html = """
-<!DOCTYPE html>
-<html>
-<head>
-<title>Results</title>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-
-<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
-
-</head>
-
-<body class="bg-dark text-light">
-
-<div class="container text-center mt-5">
-<h2>📊 Election Results</h2>
-"""
-
-# Show all candidates
-for d in data:
-    html += f"""
-    <div class="card bg-secondary mt-3 p-2">
-        <img src="/static/uploads/{d[3]}" width="120" style="border-radius:10px;"><br>
-        {d[0]} ({d[1]}) - {d[2]} votes
-    </div>
-    """
-
-# Winners section
 html += f"""
 <div class="mt-5">
     <h3>🏆 Male Winner</h3>
