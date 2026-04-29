@@ -156,47 +156,87 @@ body{background:linear-gradient(135deg,#1f1c2c,#928dab);}
 # -------- LOGIN --------
 @app.route("/login", methods=["GET","POST"])
 def login():
-    error=None
-    if request.method=="POST":
-        roll=request.form["roll"]
-        password=request.form["password"]
+    error = None
 
-        conn=sqlite3.connect("voting.db")
-        c=conn.cursor()
-        c.execute("SELECT * FROM students WHERE roll=? AND password=? AND allowed=1",(roll,password))
-        user=c.fetchone()
-        conn.close()
+    if request.method == "POST":
+        roll = request.form.get("roll")
+        password = request.form.get("password")
 
-        if user:
-            session["roll"]=roll
-            return redirect("/vote")
+        # Basic validation
+        if not roll or not password:
+            error = "Please enter both roll number and password"
         else:
-            error="Invalid login"
+            conn = sqlite3.connect("voting.db")
+            c = conn.cursor()
+
+            c.execute(
+                "SELECT * FROM students WHERE roll=? AND password=? AND allowed=1",
+                (roll, password)
+            )
+            user = c.fetchone()
+            conn.close()
+
+            if user:
+                session["roll"] = roll
+                return redirect("/vote")
+            else:
+                error = "Invalid roll number or not allowed"
 
     return render_template_string("""
 <!DOCTYPE html>
 <html>
 <head>
+<title>Login</title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
 <style>
-body{background:linear-gradient(135deg,#1f1c2c,#928dab);display:flex;justify-content:center;align-items:center;height:100vh;}
-.card{background:#2c2c3e;color:white;border-radius:20px;}
+body {
+    background: linear-gradient(135deg,#1f1c2c,#928dab);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+}
+.card {
+    background: #2c2c3e;
+    color: white;
+    border-radius: 20px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+}
 </style>
 </head>
+
 <body>
-<div class="card p-4 text-center">
-<h3>Login</h3>
+
+<div class="card p-4 text-center" style="width:320px;">
+
+<h3>🗳 Student Login</h3>
+
+<p class="small text-light mb-3">
+👉 Roll number = Password
+</p>
+
 <form method="post">
-<input class="form-control mb-2" name="roll">
-<input type="password" class="form-control mb-2" name="password">
+
+<label class="text-start w-100">Roll Number</label>
+<input class="form-control mb-2" name="roll" placeholder="Enter roll number" required>
+
+<label class="text-start w-100">Password</label>
+<input type="password" class="form-control mb-3" name="password" placeholder="Enter password" required>
+
+{% if error %}
 <p class="text-danger">{{error}}</p>
+{% endif %}
+
 <button class="btn btn-primary w-100">Login</button>
+
 </form>
+
 </div>
+
 </body>
 </html>
-""",error=error)
-
+""", error=error)
 # -------- VOTE --------
 @app.route("/vote", methods=["GET","POST"])
 def vote():
@@ -291,33 +331,81 @@ input:checked + .card{border:3px solid gold;}
 # -------- RESULT --------
 @app.route("/result")
 def result():
-    conn=sqlite3.connect("voting.db")
-    c=conn.cursor()
+    conn = sqlite3.connect("voting.db")
+    c = conn.cursor()
     c.execute("SELECT * FROM candidates")
-    data=c.fetchall()
+    data = c.fetchall()
     conn.close()
 
-    total=sum([d[4] for d in data]) or 1
+    total_votes = sum([d[4] for d in data]) or 1
+    sorted_data = sorted(data, key=lambda x: x[4], reverse=True)
 
-    html="<h2>Results</h2>"
+    male = [d for d in data if d[2]=="Male"]
+    female = [d for d in data if d[2]=="Female"]
 
-    for d in data:
-        percent=(d[4]/total)*100
-        html+=f"<p>{d[1]} - {percent:.1f}%</p>"
+    male_winner = max(male, key=lambda x: x[4]) if male else None
+    female_winner = max(female, key=lambda x: x[4]) if female else None
 
+    html = """
+<!DOCTYPE html>
+<html>
+<head>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>
+body{background:#121212;color:white;}
+.card{background:white;color:black;border-radius:12px;}
+.progress{height:20px;}
+.winner{
+    border:3px solid gold;
+    box-shadow:0 0 20px gold;
+}
+</style>
+</head>
+
+<body>
+<div class="container mt-5">
+
+<h2 class="text-center mb-4">📊 Election Results</h2>
+"""
+
+    for d in sorted_data:
+        percent = (d[4]/total_votes)*100
+
+        html += f"""
+<div class="card p-3 mb-3">
+<b>{d[1]} ({d[2]})</b><br>
+Votes: {d[4]} ({percent:.1f}%)
+
+<div class="progress mt-2">
+<div class="progress-bar bg-success" style="width:{percent}%"></div>
+</div>
+</div>
+"""
+
+    html += f"""
+<div class="row mt-5 text-center">
+
+<div class="col-md-6">
+<div class="card winner p-3">
+<h4>🏆 Male Winner</h4>
+<img src="/static/uploads/{male_winner[3]}" height="200">
+<h5>{male_winner[1]}</h5>
+</div>
+</div>
+
+<div class="col-md-6">
+<div class="card winner p-3">
+<h4>🏆 Female Winner</h4>
+<img src="/static/uploads/{female_winner[3]}" height="200">
+<h5>{female_winner[1]}</h5>
+</div>
+</div>
+
+</div>
+"""
+
+    html += "</div></body></html>"
     return html
-
-# -------- EXPORT --------
-@app.route("/export")
-def export():
-    doc=SimpleDocTemplate("results.pdf")
-    styles=getSampleStyleSheet()
-
-    content=[Paragraph("Results",styles["Title"]),Spacer(1,20)]
-    doc.build(content)
-
-    return send_file("results.pdf",as_attachment=True)
-
 # -------- CLOSE --------
 @app.route("/close")
 def close():
