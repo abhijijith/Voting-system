@@ -1,4 +1,12 @@
-from flask import Flask, request, redirect, session, render_template_string, send_file
+import cloudinary
+import cloudinary.uploader
+import os
+
+cloudinary.config(
+    cloud_name=os.getenv("dpzhhfrqc"),
+    api_key=os.getenv("926551466737231"),
+    api_secret=os.getenv("_zhAprgJQwoBDiEqSq_4hPCYUQY")
+)from flask import Flask, request, redirect, session, render_template_string, send_file
 import sqlite3, os
 from werkzeug.utils import secure_filename
 from datetime import datetime
@@ -98,10 +106,12 @@ def admin():
             file = request.files.get(f"photo_{i}")
 
             if name and gender and file:
-                filename = secure_filename(file.filename)
-                file.save(os.path.join(app.config["UPLOAD_FOLDER"], filename))
-                c.execute("INSERT INTO candidates(name,gender,image,votes) VALUES (?,?,?,0)",
-                          (name, gender, filename))
+                upload = cloudinary.uploader.upload(file)
+
+image_url = upload["secure_url"]
+
+c.execute("INSERT INTO candidates(name,gender,image,votes) VALUES (?,?,?,0)",
+          (name, gender, image_url))
 
         c.execute("INSERT OR REPLACE INTO settings VALUES ('status','open')")
 
@@ -298,7 +308,7 @@ input:checked + .card{border:3px solid gold;}
 <label>
 <input type="radio" name="male" value="{{c[0]}}">
 <div class="card bg-dark position-relative">
-<img src="/static/uploads/{{c[3]}}" style="height:200px;width:100%">
+<img src="{{c[3]}}" style="height:200px;object-fit:cover;">" style="height:200px;width:100%">
 <div class="overlay">{{c[1]}}</div>
 </div>
 </label>
@@ -313,7 +323,7 @@ input:checked + .card{border:3px solid gold;}
 <label>
 <input type="radio" name="female" value="{{c[0]}}">
 <div class="card bg-dark position-relative">
-<img src="/static/uploads/{{c[3]}}" style="height:200px;width:100%">
+<img src="{{c[3]}}" style="height:200px;object-fit:cover;">" style="height:200px;width:100%">
 <div class="overlay">{{c[1]}}</div>
 </div>
 </label>
