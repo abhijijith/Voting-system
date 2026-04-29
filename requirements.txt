@@ -2,4 +2,3 @@ flask
 werkzeug
 gunicorn
 reportlab
-cloudinary
